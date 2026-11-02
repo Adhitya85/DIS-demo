@@ -57,16 +57,29 @@ function App() {
     setBusy(false)
   }
 
-  const downloadPackage = () => {
-    if (!signedPackage) return
-    const blob = new Blob([JSON.stringify(signedPackage, null, 2)], { type: 'application/json' })
+  const downloadPackage = (packageToDownload: SignedPackage, filename: string, notice: string) => {
+    const blob = new Blob([JSON.stringify(packageToDownload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = globalThis.document.createElement('a')
     link.href = url
-    link.download = 'signed-package.json'
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
-    setMessage('Signed package downloaded. You can attach it to an email or transfer it to another PC.')
+    setMessage(notice)
+  }
+
+  const downloadCurrentPackage = () => {
+    if (!signedPackage) return
+    try {
+      const currentPublicKey = JSON.parse(receiverKey) as JsonWebKey
+      downloadPackage(
+        { ...signedPackage, document: receiverDocument, publicKey: currentPublicKey },
+        'signed-package-current.json',
+        'Current package downloaded with the receiver values, including any injected changes.',
+      )
+    } catch {
+      setMessage('The public key must contain valid JSON before downloading the package.')
+    }
   }
 
   const importPackage = async (file: File) => {
@@ -125,12 +138,12 @@ function App() {
           <div className="key-row"><span className="key-icon">⌁</span><div><strong>RSA-PSS 2048</strong><small>SHA-256 digest · 32 byte salt</small></div><button className="secondary" onClick={async () => { const pair = await generateKeyPair(); setKeyPair(pair); setPublicKey(await exportPublicKey(pair.publicKey)); setMessage('New key pair generated.'); }}>Generate new key</button></div>
           <button className="primary full" disabled={busy} onClick={createPackage}>{busy ? 'Working…' : 'Create signed package'} <span>→</span></button>
           {publicKey && <div className="value-grid"><Value label="SHA-256 digest" value={signedPackage?.digest ?? '—'} /><Value label="Document CRC-32" value={signedPackage?.documentCrc ?? '—'} /><Value label="Public key CRC-32" value={signedPackage?.publicKeyCrc ?? '—'} /><Value label="Private key" value="EXCLUDED" accent /></div>}
-          {signedPackage && <button className="download" onClick={downloadPackage}>Download signed package <span>↓</span></button>}
+          {signedPackage && <button className="download" onClick={() => downloadPackage(signedPackage, 'signed-package.json', 'Original signed package downloaded. You can attach it to an email or transfer it to another PC.')}>Download signed package <span>↓</span></button>}
           {publicKey && <details><summary>View public key (JWK)</summary><pre>{JSON.stringify(publicKey, null, 2)}</pre></details>}
         </section>
         <section className="panel receiver">
           <div className="panel-heading"><div><span className="kicker">02 / RECEIVER</span><h2>Inspect and verify</h2></div><div className="receiver-actions"><button className="load-top" onClick={() => packageInput.current?.click()}>Load package</button><span className="status-pill receiver-pill">RECEIVER</span></div></div>
-          {signedPackage ? <><div className="scenario-bar"><span>Verification options</span><button onClick={() => scenario('original')}>Original</button><button onClick={() => scenario('document')}>Tamper document</button><button onClick={() => scenario('key')}>Tamper key</button><button onClick={() => scenario('both')}>Tamper both</button></div><label>Received document<textarea value={receiverDocument} onChange={(event) => { setReceiverDocument(event.target.value); setResult(undefined) }} /></label><label>Received public key<textarea className="key-textarea" value={receiverKey} onChange={(event) => { setReceiverKey(event.target.value); setResult(undefined) }} /></label><button className="verify" disabled={busy} onClick={verify}>Verify package <span>↗</span></button>{result && <Result result={result} />}</> : <div className="empty"><span>◎</span><p>Load a signed package to verify it here<br /><button className="load-package" onClick={() => packageInput.current?.click()}>Choose package file</button></p></div>}
+          {signedPackage ? <><div className="scenario-bar"><span>Verification options</span><button onClick={() => scenario('original')}>Original</button><button onClick={() => scenario('document')}>Tamper document</button><button onClick={() => scenario('key')}>Tamper key</button><button onClick={() => scenario('both')}>Tamper both</button></div><label>Received document<textarea value={receiverDocument} onChange={(event) => { setReceiverDocument(event.target.value); setResult(undefined) }} /></label><label>Received public key<textarea className="key-textarea" value={receiverKey} onChange={(event) => { setReceiverKey(event.target.value); setResult(undefined) }} /></label><button className="verify" disabled={busy} onClick={verify}>Verify package <span>↗</span></button><button className="download" onClick={downloadCurrentPackage}>Download current values <span>↓</span></button>{result && <Result result={result} />}</> : <div className="empty"><span>◎</span><p>Load a signed package to verify it here<br /><button className="load-package" onClick={() => packageInput.current?.click()}>Choose package file</button></p></div>}
           <input ref={packageInput} className="file-input" type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importPackage(file); event.target.value = '' }} />
         </section>
       </div>
