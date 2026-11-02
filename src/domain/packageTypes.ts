@@ -1,5 +1,9 @@
 export type SignedPackage = {
   document: string
+  fileName?: string
+  mimeType?: string
+  fileSize?: number
+  payloadBase64?: string
   signature: string
   publicKey: JsonWebKey
   documentCrc: string

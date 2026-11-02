@@ -10,10 +10,15 @@ export async function generateKeyPair(): Promise<CryptoKeyPair> {
   ) as Promise<CryptoKeyPair>
 }
 
-export async function digestDocument(document: string): Promise<{ bytes: Uint8Array; hex: string }> {
-  const bytes = new TextEncoder().encode(document)
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+export async function digestBytes(bytes: Uint8Array): Promise<{ bytes: Uint8Array; hex: string }> {
+  const safeBytes = new Uint8Array(new ArrayBuffer(bytes.byteLength))
+  safeBytes.set(bytes)
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', safeBytes))
   return { bytes: digest, hex: bytesToHex(digest) }
+}
+
+export async function digestDocument(document: string): Promise<{ bytes: Uint8Array; hex: string }> {
+  return digestBytes(new TextEncoder().encode(document))
 }
 
 export async function signDigest(privateKey: CryptoKey, digest: Uint8Array): Promise<string> {

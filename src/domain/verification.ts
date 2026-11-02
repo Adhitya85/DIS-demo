@@ -1,11 +1,11 @@
 import type { SignedPackage, VerificationResult } from './packageTypes'
-import { digestDocument, importPublicKey, verifyDigest } from '../crypto/signing'
-import { crc32 } from '../integrity/crc32'
+import { digestBytes, importPublicKey, verifyDigest } from '../crypto/signing'
+import { crc32, crc32Bytes } from '../integrity/crc32'
 import { stableJson } from '../crypto/encoding'
 
 export async function verifyPackage(
   packageData: SignedPackage,
-  receivedDocument: string,
+  receivedBytes: Uint8Array,
   receivedPublicKeyText: string,
 ): Promise<VerificationResult> {
   let publicKey: JsonWebKey
@@ -21,10 +21,10 @@ export async function verifyPackage(
     }
   }
 
-  const documentCrcMatches = crc32(receivedDocument) === packageData.documentCrc
+  const documentCrcMatches = crc32Bytes(receivedBytes) === packageData.documentCrc
   const publicKeyCrcMatches = crc32(stableJson(publicKey)) === packageData.publicKeyCrc
   try {
-    const { bytes } = await digestDocument(receivedDocument)
+    const { bytes } = await digestBytes(receivedBytes)
     const signatureValid = await verifyDigest(await importPublicKey(publicKey), bytes, packageData.signature)
     let diagnosis = 'Authentic and intact: the signature is valid and both CRCs match.'
     if (!signatureValid) {

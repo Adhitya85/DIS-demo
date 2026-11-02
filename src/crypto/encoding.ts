@@ -6,6 +6,10 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+export function stringToBytes(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
 export function base64ToBytes(value: string): Uint8Array {
   const binary = atob(value)
   const bytes = new Uint8Array(new ArrayBuffer(binary.length))

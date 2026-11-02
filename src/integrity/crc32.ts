@@ -1,5 +1,8 @@
 export function crc32(value: string): string {
-  const bytes = new TextEncoder().encode(value)
+  return crc32Bytes(new TextEncoder().encode(value))
+}
+
+export function crc32Bytes(bytes: Uint8Array): string {
   let crc = 0xffffffff
   for (const byte of bytes) {
     crc ^= byte
