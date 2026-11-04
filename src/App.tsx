@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
-import { exportPublicKey, generateKeyPair, digestBytes, signDigest } from './crypto/signing'
+import { exportPublicKey, exportPrivateKey, generateKeyPair, importKeyPair, digestBytes, signDigest } from './crypto/signing'
 import { base64ToBytes, bytesToBase64, stableJson, stringToBytes } from './crypto/encoding'
 import { crc32, crc32Bytes } from './integrity/crc32'
 import type { SignedPackage, VerificationResult } from './domain/packageTypes'
@@ -28,6 +28,36 @@ function App() {
   const packageInput = useRef<HTMLInputElement>(null)
   const signerFileInput = useRef<HTMLInputElement>(null)
   const receiverFileInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    void fetch('/api/private-key')
+      .then(async (response) => response.ok ? response.json() as Promise<{ key: JsonWebKey | null }> : undefined)
+      .then(async (saved) => {
+        if (!saved?.key) return
+        const pair = await importKeyPair(saved.key)
+        setKeyPair(pair)
+        setPublicKey(await exportPublicKey(pair.publicKey))
+        setMessage('Last private key loaded from the local key store.')
+      })
+      .catch(() => setMessage('Private-key store unavailable. Start the local server to persist keys.'))
+  }, [])
+
+  const persistPrivateKey = async (privateKey: CryptoKey) => {
+    const key = await exportPrivateKey(privateKey)
+    let response: Response
+    try {
+      response = await fetch('/api/private-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      })
+    } catch {
+      throw new Error('Private-key store is unavailable')
+    }
+    if (!response.ok) {
+      throw new Error(`Private-key store rejected the key (${response.status})`)
+    }
+  }
 
   const readFile = async (file: File, receiver = false) => {
     if (file.size > maxFileSize) {
@@ -71,6 +101,11 @@ function App() {
       }
       setKeyPair(pair)
       setPublicKey(exported)
+      try {
+        await persistPrivateKey(pair.privateKey)
+      } catch {
+        setMessage('Package created, but the private key was not saved. Start the key store with "npm run server".')
+      }
       setSignedPackage(nextPackage)
       setReceiverDocument(document)
       setReceiverBytes(documentBytes)
@@ -204,7 +239,7 @@ function App() {
           <label>Document or file<textarea value={document} onChange={(event) => { const value = event.target.value; setDocument(value); setDocumentBytes(stringToBytes(value)); setFileName('document.txt'); setMimeType('text/plain'); setResult(undefined) }} /></label>
           <div className="file-picker"><button className="load-package" onClick={() => signerFileInput.current?.click()}>Choose file</button><span>{fileName} · {formatBytes(documentBytes.byteLength)}</span></div>
           <input ref={signerFileInput} className="file-input" type="file" accept=".pdf,.txt,.csv,.json,.xml,.html,.md,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*,application/pdf,application/zip" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); event.target.value = '' }} />
-          <div className="key-row"><span className="key-icon">⌁</span><div><strong>RSA-PSS 2048</strong><small>SHA-256 digest · 32 byte salt</small></div><button className="secondary" onClick={async () => { const pair = await generateKeyPair(); setKeyPair(pair); setPublicKey(await exportPublicKey(pair.publicKey)); setMessage('New key pair generated.'); }}>Generate new key</button></div>
+          <div className="key-row"><span className="key-icon">⌁</span><div><strong>RSA-PSS 2048</strong><small>SHA-256 digest · 32 byte salt</small></div><button className="secondary" onClick={async () => { try { const pair = await generateKeyPair(); await persistPrivateKey(pair.privateKey); setKeyPair(pair); setPublicKey(await exportPublicKey(pair.publicKey)); setMessage('New key pair generated and saved to the local key store.'); } catch { setMessage('Could not save the new key. Start the key store with "npm run server".') } }}>Generate new key</button></div>
           <button className="primary full" disabled={busy} onClick={createPackage}>{busy ? 'Working…' : 'Create signed package'} <span>→</span></button>
           {publicKey && <div className="value-grid"><Value label="SHA-256 digest" value={signedPackage?.digest ?? '—'} /><Value label="Document CRC-32" value={signedPackage?.documentCrc ?? '—'} /><Value label="Public key CRC-32" value={signedPackage?.publicKeyCrc ?? '—'} /><Value label="Private key" value="EXCLUDED" accent /></div>}
           {signedPackage && <button className="download" onClick={() => downloadPackage(signedPackage, 'signed-package.json', 'Original signed package downloaded. You can attach it to an email or transfer it to another PC.')}>Download signed package <span>↓</span></button>}

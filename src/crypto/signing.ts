@@ -41,6 +41,25 @@ export async function exportPublicKey(publicKey: CryptoKey): Promise<JsonWebKey>
   return crypto.subtle.exportKey('jwk', publicKey)
 }
 
+export async function exportPrivateKey(privateKey: CryptoKey): Promise<JsonWebKey> {
+  return crypto.subtle.exportKey('jwk', privateKey)
+}
+
+export async function importKeyPair(privateJwk: JsonWebKey): Promise<CryptoKeyPair> {
+  const algorithm = { name: 'RSA-PSS', hash: 'SHA-256' }
+  const privateKey = await crypto.subtle.importKey('jwk', privateJwk, algorithm, true, ['sign'])
+  const publicJwk: JsonWebKey = {
+    alg: privateJwk.alg,
+    e: privateJwk.e,
+    ext: true,
+    key_ops: ['verify'],
+    kty: privateJwk.kty,
+    n: privateJwk.n,
+  }
+  const publicKey = await crypto.subtle.importKey('jwk', publicJwk, algorithm, true, ['verify'])
+  return { privateKey, publicKey }
+}
+
 export async function importPublicKey(jwk: JsonWebKey): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     'jwk',
